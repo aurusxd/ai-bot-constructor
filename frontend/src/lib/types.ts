@@ -25,6 +25,19 @@ export interface Assistant extends AssistantFields {
 	updated_at: string;
 }
 
+export interface Conversation {
+	id: number;
+	telegram_chat_id: string;
+	created_at: string;
+}
+
+export interface Message {
+	id: number;
+	role: 'user' | 'assistant';
+	content: string;
+	created_at: string;
+}
+
 export const EMPTY_ASSISTANT: AssistantCreate = {
 	name: '',
 	position: '',

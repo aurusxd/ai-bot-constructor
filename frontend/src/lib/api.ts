@@ -1,6 +1,12 @@
 import { env } from '$env/dynamic/public';
 
-import type { Assistant, AssistantCreate, AssistantUpdate } from './types';
+import type {
+	Assistant,
+	AssistantCreate,
+	AssistantUpdate,
+	Conversation,
+	Message
+} from './types';
 
 const BASE_URL = env.PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -62,4 +68,18 @@ export function activateAssistant(id: number): Promise<Assistant> {
 
 export function deactivateAssistant(id: number): Promise<Assistant> {
 	return request<Assistant>(`/api/assistants/${id}/deactivate`, { method: 'POST' });
+}
+
+export function listConversations(id: number): Promise<Conversation[]> {
+	return request<Conversation[]>(`/api/assistants/${id}/conversations`);
+}
+
+export function listMessages(id: number, chatId: string): Promise<Message[]> {
+	return request<Message[]>(
+		`/api/assistants/${id}/conversations/${encodeURIComponent(chatId)}/messages`
+	);
+}
+
+export function getSystemPrompt(id: number): Promise<{ prompt: string }> {
+	return request<{ prompt: string }>(`/api/assistants/${id}/system-prompt`);
 }
