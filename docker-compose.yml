@@ -14,8 +14,13 @@ services:
 
   frontend:
     build: ./frontend
+    env_file:
+      - path: .env
+        required: false
     environment:
       PORT: "3000"
+      # The browser, not the frontend container, calls the backend.
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:
