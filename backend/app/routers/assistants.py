@@ -3,9 +3,11 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from app import crud
+from app.config import get_settings
 from app.database import DbSession
 from app.models import Assistant
 from app.schemas import AssistantCreate, AssistantOut, AssistantUpdate
+from app.services import telegram
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"])
 
@@ -47,3 +49,24 @@ def delete_assistant(assistant_id: int, db: DbSession) -> None:
     assistant = _get_or_404(db, assistant_id)
     crud.delete_assistant(db, assistant)
     logger.info("Deleted assistant {}", assistant_id)
+
+
+@router.post("/{assistant_id}/activate", response_model=AssistantOut)
+def activate_assistant(assistant_id: int, db: DbSession) -> Assistant:
+    assistant = _get_or_404(db, assistant_id)
+    url = f"{get_settings().public_base_url}/webhook/telegram/{assistant.id}"
+    try:
+        telegram.set_webhook(assistant.bot_token, url)
+    except telegram.TelegramError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return crud.set_webhook_active(db, assistant, True)
+
+
+@router.post("/{assistant_id}/deactivate", response_model=AssistantOut)
+def deactivate_assistant(assistant_id: int, db: DbSession) -> Assistant:
+    assistant = _get_or_404(db, assistant_id)
+    try:
+        telegram.delete_webhook(assistant.bot_token)
+    except telegram.TelegramError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return crud.set_webhook_active(db, assistant, False)
