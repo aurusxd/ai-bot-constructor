@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.logging_conf import setup_logging
-from app.routers import assistants
+from app.routers import assistants, webhook
 
 
 def create_app() -> FastAPI:
@@ -18,6 +18,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(assistants.router)
+    app.include_router(webhook.router)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
