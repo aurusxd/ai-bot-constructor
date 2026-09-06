@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      # The stack starts with defaults when .env has not been created yet.
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: sqlite:///./data/app.db
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
