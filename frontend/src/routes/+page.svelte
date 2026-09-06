@@ -62,8 +62,8 @@
 					<td>{assistant.name}</td>
 					<td>{assistant.position}</td>
 					<td>
-						<span class="status" class:active={assistant.webhook_active}>
-							{assistant.webhook_active ? 'Активен' : 'Не активен'}
+						<span class="status" class:active={assistant.bot_active}>
+							{assistant.bot_active ? 'Активен' : 'Не активен'}
 						</span>
 					</td>
 					<td class="actions">

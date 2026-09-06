@@ -19,7 +19,7 @@
 	const id = Number(page.params.id);
 
 	let values = $state<AssistantCreate>({ ...EMPTY_ASSISTANT });
-	let webhookActive = $state(false);
+	let botActive = $state(false);
 	let loading = $state(true);
 	let saving = $state(false);
 	let switching = $state(false);
@@ -33,7 +33,7 @@
 			// The API never returns bot_token, so the field stays empty and an
 			// empty value tells the backend to keep the stored one.
 			values = { ...assistant, bot_token: '' };
-			webhookActive = assistant.webhook_active;
+			botActive = assistant.bot_active;
 		} catch (exc) {
 			error = exc instanceof Error ? exc.message : String(exc);
 		} finally {
@@ -59,14 +59,14 @@
 		}
 	}
 
-	async function toggleWebhook() {
+	async function toggleBot() {
 		switching = true;
 		error = '';
 		notice = '';
 		try {
-			const assistant = webhookActive ? await deactivateAssistant(id) : await activateAssistant(id);
-			webhookActive = assistant.webhook_active;
-			notice = webhookActive ? 'Бот активирован' : 'Бот отключён';
+			const assistant = botActive ? await deactivateAssistant(id) : await activateAssistant(id);
+			botActive = assistant.bot_active;
+			notice = botActive ? 'Бот активирован' : 'Бот отключён';
 		} catch (exc) {
 			report(exc);
 		} finally {
@@ -122,13 +122,13 @@
 {#if loading}
 	<p>Загрузка…</p>
 {:else}
-	<section class="webhook">
+	<section class="bot-status">
 		<p>
-			Статус вебхука:
-			<strong class:active={webhookActive}>{webhookActive ? 'активен' : 'не активен'}</strong>
+			Статус бота:
+			<strong class:active={botActive}>{botActive ? 'активен' : 'не активен'}</strong>
 		</p>
-		<button type="button" onclick={toggleWebhook} disabled={switching}>
-			{webhookActive ? 'Отключить бота' : 'Активировать бота'}
+		<button type="button" onclick={toggleBot} disabled={switching}>
+			{botActive ? 'Отключить бота' : 'Активировать бота'}
 		</button>
 		<button type="button" onclick={copyPrompt}>Скопировать system prompt</button>
 	</section>
@@ -145,14 +145,14 @@
 {/if}
 
 <style>
-	.webhook {
+	.bot-status {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
 		margin-bottom: 1.5rem;
 	}
 
-	.webhook p {
+	.bot-status p {
 		margin: 0;
 	}
 

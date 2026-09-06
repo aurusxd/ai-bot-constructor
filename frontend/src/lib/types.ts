@@ -20,7 +20,7 @@ export interface AssistantUpdate extends AssistantFields {
 
 export interface Assistant extends AssistantFields {
 	id: number;
-	webhook_active: boolean;
+	bot_active: boolean;
 	created_at: string;
 	updated_at: string;
 }
