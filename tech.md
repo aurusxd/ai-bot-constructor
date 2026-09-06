@@ -55,6 +55,10 @@ backend/
   alembic/
     versions/
     env.py
+  tests/
+    conftest.py           # тестовое приложение на отдельной БД
+    test_crud.py          # CRUD ассистентов и диалогов
+    test_llm.py           # сборка system prompt и разбор ответа LLM
   alembic.ini
   pyproject.toml
   Dockerfile
@@ -69,6 +73,7 @@ frontend/
       api.ts                    # обёртка над fetch к backend
       types.ts                  # типы, зеркалящие Pydantic-схемы
       AssistantForm.svelte      # общая форма создания и редактирования
+      Conversations.svelte      # список диалогов и переписка выбранного чата
   package.json
   Dockerfile
 docker-compose.yml
@@ -130,8 +135,14 @@ CLAUDE.md
   Всегда отвечает `200 {"ok": true}`, кроме несуществующего `id` (404): на любой
   не-2xx ответ Telegram повторяет апдейт, поэтому ошибки отправки и LLM пишутся
   в лог, а не отдаются наружу. Апдейты без текстового сообщения игнорируются.
+- `GET /api/assistants/{id}/conversations` — список диалогов ассистента, новые
+  сверху, схема `ConversationOut` (`id`, `telegram_chat_id`, `created_at`)
 - `GET /api/assistants/{id}/conversations/{telegram_chat_id}/messages` — история
-  диалога (этап 4, для просмотра демо-переписки в панели)
+  диалога в хронологическом порядке, схема `MessageOut` (`id`, `role`, `content`,
+  `created_at`). `404`, если у ассистента нет диалога с таким chat id
+- `GET /api/assistants/{id}/system-prompt` — итоговый system prompt ассистента,
+  тот же текст, что уходит в LLM, схема `SystemPromptOut` (`prompt`). Нужен,
+  чтобы скопировать его из панели и проверить на стороне
 
 `activate` и `deactivate` возвращают `AssistantOut`. Если Telegram отклонил вызов
 или недоступен, оба отдают `502` с описанием ошибки, `webhook_active` не меняется.
@@ -184,6 +195,10 @@ Pydantic-схемы: `AssistantCreate`, `AssistantUpdate`, `AssistantOut` — п
   сообщение при отсутствии ответа, telegram chat id админа, токен бота.
 - Кнопка «Активировать бота» на странице редактирования — вызывает
   `POST /api/assistants/{id}/activate`, показывает статус webhook.
+- На той же странице: блок «Диалоги» со списком чатов и перепиской выбранного
+  чата, и кнопка «Скопировать system prompt», кладущая текст в буфер обмена.
+  Буфер обмена доступен только в secure context (https или localhost), поэтому
+  при отказе панель показывает промпт в поле для ручного копирования.
 
 ## 8. Конфиг
 
