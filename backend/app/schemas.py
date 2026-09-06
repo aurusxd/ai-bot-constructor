@@ -29,3 +29,26 @@ class AssistantOut(AssistantBase):
     webhook_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class LlmReply(BaseModel):
+    """Shape the LLM must return for every client message."""
+
+    reply: str = ""
+    needs_human: bool
+    reason: str | None = None
+
+
+class TelegramChat(BaseModel):
+    id: int
+
+
+class TelegramMessage(BaseModel):
+    chat: TelegramChat
+    text: str | None = None
+
+
+class TelegramUpdate(BaseModel):
+    """Only the parts of a Telegram update this bot reacts to."""
+
+    message: TelegramMessage | None = None
