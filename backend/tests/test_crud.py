@@ -12,7 +12,7 @@ def test_create_assistant_hides_bot_token(client: TestClient) -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["name"] == ASSISTANT_PAYLOAD["name"]
-    assert body["webhook_active"] is False
+    assert body["bot_active"] is False
     assert "bot_token" not in body
 
 
