@@ -27,7 +27,7 @@ class Assistant(Base):
     fallback_message: Mapped[str] = mapped_column(Text)
     admin_chat_id: Mapped[str] = mapped_column(String(64))
     bot_token: Mapped[str] = mapped_column(String(255))
-    webhook_active: Mapped[bool] = mapped_column(default=False)
+    bot_active: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
