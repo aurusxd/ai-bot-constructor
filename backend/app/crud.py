@@ -23,6 +23,8 @@ def create_assistant(db: Session, data: AssistantCreate) -> Assistant:
 
 def update_assistant(db: Session, assistant: Assistant, data: AssistantUpdate) -> Assistant:
     for field, value in data.model_dump().items():
+        if field == "bot_token" and not value:
+            continue
         setattr(assistant, field, value)
     db.commit()
     db.refresh(assistant)

@@ -19,7 +19,8 @@ class AssistantCreate(AssistantBase):
 
 
 class AssistantUpdate(AssistantBase):
-    bot_token: str
+    # The panel cannot prefill the stored token, so an empty value keeps it.
+    bot_token: str | None = None
 
 
 class AssistantOut(AssistantBase):
