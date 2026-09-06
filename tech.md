@@ -125,9 +125,19 @@ CLAUDE.md
 - `POST /api/assistants/{id}/activate` — вызвать Telegram `setWebhook` на
   `{PUBLIC_BASE_URL}/webhook/telegram/{id}`, выставить `webhook_active = true`
 - `POST /api/assistants/{id}/deactivate` — вызвать `deleteWebhook`, `webhook_active = false`
-- `POST /webhook/telegram/{id}` — приём апдейтов от Telegram для конкретного ассистента
+- `POST /webhook/telegram/{id}` — приём апдейтов от Telegram для конкретного ассистента.
+  Всегда отвечает `200 {"ok": true}`, кроме несуществующего `id` (404): на любой
+  не-2xx ответ Telegram повторяет апдейт, поэтому ошибки отправки и LLM пишутся
+  в лог, а не отдаются наружу. Апдейты без текстового сообщения игнорируются.
 - `GET /api/assistants/{id}/conversations/{telegram_chat_id}/messages` — история
   диалога (этап 4, для просмотра демо-переписки в панели)
+
+`activate` и `deactivate` возвращают `AssistantOut`. Если Telegram отклонил вызов
+или недоступен, оба отдают `502` с описанием ошибки, `webhook_active` не меняется.
+
+Схемы, не относящиеся к панели: `LlmReply` (ответ LLM, раздел 6) и `TelegramUpdate`
+с вложенными `TelegramMessage`, `TelegramChat` (разбор апдейта, только поля
+`message.chat.id` и `message.text`) лежат там же, в `schemas.py`.
 
 Панель работает на отдельном origin, поэтому backend включает CORS-middleware
 (`allow_origins=["*"]`) для запросов из браузера.
