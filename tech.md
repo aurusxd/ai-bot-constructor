@@ -29,7 +29,9 @@ chat id админа, токен бота). После сохранения ка
 - Пакетный менеджер Python: uv
 - Логи: loguru
 - Разворачивание: Docker / docker-compose
-- Telegram: HTTP-запросы к Bot API через httpx (без сторонних telegram-фреймворков)
+- Telegram: long polling `getUpdates` через httpx (без сторонних telegram-фреймворков).
+  Polling выбран вместо webhook, чтобы не требовать HTTPS и публичного адреса:
+  бот сам ходит за апдейтами и работает с любой машины, в том числе локальной
 - LLM: DeepSeek API (OpenAI-совместимый `chat/completions` эндпоинт, `response_format: json_object`),
   вызывается через httpx, провайдер вынесен за интерфейс `services/llm.py`,
   чтобы при необходимости заменить на другой
@@ -46,11 +48,12 @@ backend/
     schemas.py             # Pydantic-схемы (request/response)
     crud.py                 # операции с БД для ассистентов и диалогов
     routers/
-      assistants.py       # CRUD + активация бота
-      webhook.py           # приём апдейтов от Telegram
+      assistants.py       # CRUD + запуск и остановка бота
     services/
-      telegram.py          # sendMessage, setWebhook, deleteWebhook
+      telegram.py          # sendMessage, getUpdates, deleteWebhook
       llm.py                # формирование system prompt, вызов DeepSeek, парсинг ответа
+      dialog.py             # обработка одного входящего сообщения (раздел 6)
+      poller.py             # поток long polling на каждого активного ассистента
     logging_conf.py       # настройка loguru
   alembic/
     versions/
@@ -97,7 +100,7 @@ CLAUDE.md
 | fallback_message | text | сообщение при отсутствии ответа |
 | admin_chat_id | str | telegram chat id админа |
 | bot_token | str | токен telegram-бота этого ассистента |
-| webhook_active | bool, default false | зарегистрирован ли webhook |
+| bot_active | bool, default false | запущен ли polling для этого бота |
 | created_at | datetime | |
 | updated_at | datetime | |
 
@@ -128,13 +131,9 @@ CLAUDE.md
 - `GET /api/assistants/{id}` — получить ассистента
 - `PUT /api/assistants/{id}` — обновить ассистента
 - `DELETE /api/assistants/{id}` — удалить ассистента
-- `POST /api/assistants/{id}/activate` — вызвать Telegram `setWebhook` на
-  `{PUBLIC_BASE_URL}/webhook/telegram/{id}`, выставить `webhook_active = true`
-- `POST /api/assistants/{id}/deactivate` — вызвать `deleteWebhook`, `webhook_active = false`
-- `POST /webhook/telegram/{id}` — приём апдейтов от Telegram для конкретного ассистента.
-  Всегда отвечает `200 {"ok": true}`, кроме несуществующего `id` (404): на любой
-  не-2xx ответ Telegram повторяет апдейт, поэтому ошибки отправки и LLM пишутся
-  в лог, а не отдаются наружу. Апдейты без текстового сообщения игнорируются.
+- `POST /api/assistants/{id}/activate` — запустить polling для бота ассистента,
+  выставить `bot_active = true`
+- `POST /api/assistants/{id}/deactivate` — остановить polling, `bot_active = false`
 - `GET /api/assistants/{id}/conversations` — список диалогов ассистента, новые
   сверху, схема `ConversationOut` (`id`, `telegram_chat_id`, `created_at`)
 - `GET /api/assistants/{id}/conversations/{telegram_chat_id}/messages` — история
@@ -144,8 +143,11 @@ CLAUDE.md
   тот же текст, что уходит в LLM, схема `SystemPromptOut` (`prompt`). Нужен,
   чтобы скопировать его из панели и проверить на стороне
 
-`activate` и `deactivate` возвращают `AssistantOut`. Если Telegram отклонил вызов
-или недоступен, оба отдают `502` с описанием ошибки, `webhook_active` не меняется.
+`activate` и `deactivate` возвращают `AssistantOut`. `activate` перед запуском
+проверяет токен вызовом `getMe` и снимает возможный webhook через `deleteWebhook`:
+Telegram не отдаёт `getUpdates`, пока у бота зарегистрирован webhook. Если токен
+отклонён или Telegram недоступен, `activate` отдаёт `502`, `bot_active` не меняется
+и поток не стартует.
 
 Схемы, не относящиеся к панели: `LlmReply` (ответ LLM, раздел 6) и `TelegramUpdate`
 с вложенными `TelegramMessage`, `TelegramChat` (разбор апдейта, только поля
@@ -162,7 +164,8 @@ Pydantic-схемы: `AssistantCreate`, `AssistantUpdate`, `AssistantOut` — п
 
 ## 6. Логика бота
 
-1. Telegram присылает апдейт на `/webhook/telegram/{id}`.
+1. Поток поллера ассистента получает апдейт из `getUpdates` и берёт из него
+   текстовое сообщение. Апдейты без текста пропускаются.
 2. Найти или создать `conversation` по `(assistant_id, telegram_chat_id)`.
 3. Сохранить входящее сообщение в `messages` с ролью `user`.
 4. Загрузить последние 10 сообщений диалога для контекста.
@@ -186,15 +189,27 @@ Pydantic-схемы: `AssistantCreate`, `AssistantUpdate`, `AssistantOut` — п
    отправить админу на `admin_chat_id` сообщение с именем ассистента, chat id
    клиента, последним вопросом клиента и `reason`.
 
+Поллинг: на каждого активного ассистента поднимается отдельный поток, который в
+цикле вызывает `getUpdates` с `timeout=25` и `offset = последний update_id + 1`.
+Ошибки сети и Telegram логируются, поток засыпает на несколько секунд и повторяет,
+чтобы временная недоступность не гасила бота. Offset хранится в памяти потока:
+после перезапуска backend Telegram отдаёт неподтверждённые апдейты за последние
+24 часа, поэтому возможен повторный ответ на последнее сообщение. Обработка
+сообщений внутри одного бота последовательная — ответы в диалоге не обгоняют
+друг друга.
+
+Потоки поднимаются при старте приложения для всех ассистентов с `bot_active = true`
+и останавливаются при завершении работы.
+
 ## 7. Экраны панели
 
-- Список ассистентов: имя, должность, статус (`webhook_active`), кнопки
+- Список ассистентов: имя, должность, статус (`bot_active`), кнопки
   «Редактировать» и «Удалить», кнопка «Создать ассистента».
 - Форма создания/редактирования (поля ровно как в разделе 4, без служебных):
   имя сотрудника, должность, язык, тон, описание бизнеса, рабочая инструкция,
   сообщение при отсутствии ответа, telegram chat id админа, токен бота.
 - Кнопка «Активировать бота» на странице редактирования — вызывает
-  `POST /api/assistants/{id}/activate`, показывает статус webhook.
+  `POST /api/assistants/{id}/activate`, показывает статус бота.
 - На той же странице: блок «Диалоги» со списком чатов и перепиской выбранного
   чата, и кнопка «Скопировать system prompt», кладущая текст в буфер обмена.
   Буфер обмена доступен только в secure context (https или localhost), поэтому
@@ -208,7 +223,6 @@ DATABASE_URL=sqlite:///./data/app.db
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
-PUBLIC_BASE_URL=https://example.com
 LOG_LEVEL=INFO
 PUBLIC_API_BASE_URL=http://localhost:8000
 ```
@@ -222,10 +236,9 @@ SvelteKit для переменных, доступных в браузере.
 ## 9. Docker
 
 `docker-compose.yml` поднимает два сервиса: `backend` (uvicorn, том под
-sqlite-файл в `./data`) и `frontend` (сборка SvelteKit, adapter-node). Для
-локальной демонстрации `PUBLIC_BASE_URL` должен быть публично доступен
-(например через тестовый VPS или туннель), иначе Telegram не сможет достучаться
-до `/webhook/telegram/{id}`.
+sqlite-файл в `./data`) и `frontend` (сборка SvelteKit, adapter-node). Публичный
+адрес не нужен: бот сам ходит в Telegram за апдейтами, поэтому стек одинаково
+работает на VPS и на локальной машине, достаточно исходящего доступа в интернет.
 
 ## 10. Правила кода и коммитов
 
@@ -248,6 +261,7 @@ sqlite-файл в `./data`) и `frontend` (сборка SvelteKit, adapter-node
 - Ручной сценарий проходит: создать ассистента → активировать → написать боту
   обычный вопрос → получить ответ → задать вопрос не по теме → админ получает
   уведомление, клиент получает fallback-сообщение.
+- После перезапуска стека боты активных ассистентов поднимаются сами.
 
 ## 12. Дорожная карта
 
@@ -259,9 +273,10 @@ sqlite-файл в `./data`) и `frontend` (сборка SvelteKit, adapter-node
 Модели, первая миграция, CRUD `/api/assistants`, Pydantic-схемы, loguru.
 
 **Этап 2. Telegram + LLM**
-`services/telegram.py` (sendMessage, setWebhook, deleteWebhook),
+`services/telegram.py` (sendMessage, getUpdates, deleteWebhook),
 `services/llm.py` (system prompt, вызов DeepSeek, парсинг `LlmReply`),
-`routers/webhook.py`, логика fallback из раздела 6, сохранение истории.
+`services/dialog.py` и `services/poller.py`, логика fallback из раздела 6,
+сохранение истории.
 
 **Этап 3. Frontend MVP**
 Список ассистентов, форма создания/редактирования с полями из раздела 7,
