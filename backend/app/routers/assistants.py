@@ -5,9 +5,16 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.config import get_settings
 from app.database import DbSession
-from app.models import Assistant
-from app.schemas import AssistantCreate, AssistantOut, AssistantUpdate
-from app.services import telegram
+from app.models import Assistant, Conversation, Message
+from app.schemas import (
+    AssistantCreate,
+    AssistantOut,
+    AssistantUpdate,
+    ConversationOut,
+    MessageOut,
+    SystemPromptOut,
+)
+from app.services import llm, telegram
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"])
 
@@ -70,3 +77,27 @@ def deactivate_assistant(assistant_id: int, db: DbSession) -> Assistant:
     except telegram.TelegramError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return crud.set_webhook_active(db, assistant, False)
+
+
+@router.get("/{assistant_id}/conversations", response_model=list[ConversationOut])
+def list_conversations(assistant_id: int, db: DbSession) -> list[Conversation]:
+    _get_or_404(db, assistant_id)
+    return crud.list_conversations(db, assistant_id)
+
+
+@router.get(
+    "/{assistant_id}/conversations/{telegram_chat_id}/messages",
+    response_model=list[MessageOut],
+)
+def list_messages(assistant_id: int, telegram_chat_id: str, db: DbSession) -> list[Message]:
+    _get_or_404(db, assistant_id)
+    conversation = crud.get_conversation(db, assistant_id, telegram_chat_id)
+    if conversation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    return crud.list_messages(db, conversation.id)
+
+
+@router.get("/{assistant_id}/system-prompt", response_model=SystemPromptOut)
+def get_system_prompt(assistant_id: int, db: DbSession) -> SystemPromptOut:
+    assistant = _get_or_404(db, assistant_id)
+    return SystemPromptOut(prompt=llm.build_system_prompt(assistant))

@@ -77,3 +77,30 @@ def set_webhook_active(db: Session, assistant: Assistant, active: bool) -> Assis
     db.commit()
     db.refresh(assistant)
     return assistant
+
+
+def list_conversations(db: Session, assistant_id: int) -> list[Conversation]:
+    return list(
+        db.scalars(
+            select(Conversation)
+            .where(Conversation.assistant_id == assistant_id)
+            .order_by(Conversation.id.desc())
+        )
+    )
+
+
+def get_conversation(db: Session, assistant_id: int, telegram_chat_id: str) -> Conversation | None:
+    return db.scalar(
+        select(Conversation).where(
+            Conversation.assistant_id == assistant_id,
+            Conversation.telegram_chat_id == telegram_chat_id,
+        )
+    )
+
+
+def list_messages(db: Session, conversation_id: int) -> list[Message]:
+    return list(
+        db.scalars(
+            select(Message).where(Message.conversation_id == conversation_id).order_by(Message.id)
+        )
+    )
