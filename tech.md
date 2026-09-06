@@ -68,6 +68,7 @@ frontend/
     lib/
       api.ts                    # обёртка над fetch к backend
       types.ts                  # типы, зеркалящие Pydantic-схемы
+      AssistantForm.svelte      # общая форма создания и редактирования
   package.json
   Dockerfile
 docker-compose.yml
@@ -144,7 +145,9 @@ CLAUDE.md
 
 Pydantic-схемы: `AssistantCreate`, `AssistantUpdate`, `AssistantOut` — поля один в
 один со схемой `assistants` (без `bot_token` в `AssistantOut`, отдавать наружу
-не нужно).
+не нужно). В `AssistantUpdate` поле `bot_token` необязательное: панель не может
+показать текущий токен в форме, поэтому пустое значение означает «оставить
+сохранённый токен», а непустое — заменить его.
 
 ## 6. Логика бота
 
@@ -192,7 +195,12 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 PUBLIC_BASE_URL=https://example.com
 LOG_LEVEL=INFO
+PUBLIC_API_BASE_URL=http://localhost:8000
 ```
+
+`PUBLIC_API_BASE_URL` читает frontend: это адрес backend, по которому к нему
+обращается браузер, а не адрес внутри docker-сети. Префикс `PUBLIC_` требует
+SvelteKit для переменных, доступных в браузере.
 
 `bot_token` хранится в БД (у каждого ассистента свой бот), не в `.env`.
 
