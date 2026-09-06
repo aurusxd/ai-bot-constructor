@@ -72,8 +72,8 @@ def get_recent_messages(db: Session, conversation_id: int, limit: int = 10) -> l
     return list(reversed(list(recent)))
 
 
-def set_webhook_active(db: Session, assistant: Assistant, active: bool) -> Assistant:
-    assistant.webhook_active = active
+def set_bot_active(db: Session, assistant: Assistant, active: bool) -> Assistant:
+    assistant.bot_active = active
     db.commit()
     db.refresh(assistant)
     return assistant

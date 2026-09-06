@@ -3,7 +3,6 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.config import get_settings
 from app.database import DbSession
 from app.models import Assistant, Conversation, Message
 from app.schemas import (
@@ -14,7 +13,7 @@ from app.schemas import (
     MessageOut,
     SystemPromptOut,
 )
-from app.services import llm, telegram
+from app.services import llm, poller, telegram
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"])
 
@@ -54,6 +53,7 @@ def update_assistant(assistant_id: int, data: AssistantUpdate, db: DbSession) ->
 @router.delete("/{assistant_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_assistant(assistant_id: int, db: DbSession) -> None:
     assistant = _get_or_404(db, assistant_id)
+    poller.stop(assistant_id)
     crud.delete_assistant(db, assistant)
     logger.info("Deleted assistant {}", assistant_id)
 
@@ -61,22 +61,24 @@ def delete_assistant(assistant_id: int, db: DbSession) -> None:
 @router.post("/{assistant_id}/activate", response_model=AssistantOut)
 def activate_assistant(assistant_id: int, db: DbSession) -> Assistant:
     assistant = _get_or_404(db, assistant_id)
-    url = f"{get_settings().public_base_url}/webhook/telegram/{assistant.id}"
     try:
-        telegram.set_webhook(assistant.bot_token, url)
+        telegram.get_me(assistant.bot_token)
+        # Telegram refuses getUpdates while a webhook is registered for the bot.
+        telegram.delete_webhook(assistant.bot_token)
     except telegram.TelegramError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    return crud.set_webhook_active(db, assistant, True)
+
+    poller.start(assistant.id, assistant.bot_token)
+    logger.info("Activated assistant {}", assistant_id)
+    return crud.set_bot_active(db, assistant, True)
 
 
 @router.post("/{assistant_id}/deactivate", response_model=AssistantOut)
 def deactivate_assistant(assistant_id: int, db: DbSession) -> Assistant:
     assistant = _get_or_404(db, assistant_id)
-    try:
-        telegram.delete_webhook(assistant.bot_token)
-    except telegram.TelegramError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    return crud.set_webhook_active(db, assistant, False)
+    poller.stop(assistant.id)
+    logger.info("Deactivated assistant {}", assistant_id)
+    return crud.set_bot_active(db, assistant, False)
 
 
 @router.get("/{assistant_id}/conversations", response_model=list[ConversationOut])
