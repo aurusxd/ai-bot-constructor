@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.logging_conf import setup_logging
+from app.routers import assistants
 
 
 def create_app() -> FastAPI:
@@ -15,6 +16,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.include_router(assistants.router)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
