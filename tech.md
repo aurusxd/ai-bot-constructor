@@ -224,7 +224,7 @@ DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 LOG_LEVEL=INFO
-PUBLIC_API_BASE_URL=http://localhost:8000
+PUBLIC_API_BASE_URL=http://localhost:8010
 ```
 
 `PUBLIC_API_BASE_URL` читает frontend: это адрес backend, по которому к нему
@@ -242,6 +242,10 @@ SvelteKit для переменных, доступных в браузере.
 sqlite-файл в `./data`) и `frontend` (сборка SvelteKit, adapter-node). Публичный
 адрес не нужен: бот сам ходит в Telegram за апдейтами, поэтому стек одинаково
 работает на VPS и на локальной машине, достаточно исходящего доступа в интернет.
+
+Наружу публикуются порты `8010` для backend и `3000` для frontend; внутри
+контейнера backend слушает `8000`. При смене публикуемого порта backend нужно
+поправить и `PUBLIC_API_BASE_URL`, иначе панель будет стучаться не туда.
 
 ## 10. Правила кода и коммитов
 

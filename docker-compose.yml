@@ -10,7 +10,7 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "8000:8000"
+      - "8010:8000"
 
   frontend:
     build: ./frontend
@@ -20,7 +20,7 @@ services:
     environment:
       PORT: "3000"
       # The browser, not the frontend container, calls the backend.
-      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8000}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8010}
     ports:
       - "3000:3000"
     depends_on:

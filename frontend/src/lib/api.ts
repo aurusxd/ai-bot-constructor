@@ -8,7 +8,7 @@ import type {
 	Message
 } from './types';
 
-const BASE_URL = env.PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+const BASE_URL = env.PUBLIC_API_BASE_URL ?? 'http://localhost:8010';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${BASE_URL}${path}`, {
