@@ -5,11 +5,13 @@
 	import { page } from '$app/state';
 
 	import AssistantForm from '$lib/AssistantForm.svelte';
+	import Conversations from '$lib/Conversations.svelte';
 	import {
 		activateAssistant,
 		deactivateAssistant,
 		deleteAssistant,
 		getAssistant,
+		getSystemPrompt,
 		updateAssistant
 	} from '$lib/api';
 	import { EMPTY_ASSISTANT, type AssistantCreate } from '$lib/types';
@@ -23,6 +25,7 @@
 	let switching = $state(false);
 	let error = $state('');
 	let notice = $state('');
+	let promptText = $state('');
 
 	onMount(async () => {
 		try {
@@ -71,6 +74,29 @@
 		}
 	}
 
+	async function copyPrompt() {
+		error = '';
+		notice = '';
+		promptText = '';
+		let prompt: string;
+		try {
+			({ prompt } = await getSystemPrompt(id));
+		} catch (exc) {
+			report(exc);
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(prompt);
+			notice = 'System prompt скопирован';
+		} catch {
+			// The clipboard API needs a secure context, so a panel served over
+			// plain http falls back to manual copying.
+			promptText = prompt;
+			notice = 'Буфер обмена недоступен, скопируйте текст вручную';
+		}
+	}
+
 	async function remove() {
 		if (!confirm(`Удалить ассистента «${values.name}»?`)) return;
 		try {
@@ -104,9 +130,16 @@
 		<button type="button" onclick={toggleWebhook} disabled={switching}>
 			{webhookActive ? 'Отключить бота' : 'Активировать бота'}
 		</button>
+		<button type="button" onclick={copyPrompt}>Скопировать system prompt</button>
 	</section>
 
+	{#if promptText}
+		<textarea class="prompt" readonly rows="12">{promptText}</textarea>
+	{/if}
+
 	<AssistantForm bind:values submitLabel="Сохранить" tokenOptional {saving} onsubmit={save} />
+
+	<Conversations assistantId={id} />
 
 	<button type="button" class="danger" onclick={remove}>Удалить ассистента</button>
 {/if}
@@ -125,6 +158,16 @@
 
 	strong.active {
 		color: #1a7f37;
+	}
+
+	.prompt {
+		width: 100%;
+		max-width: 40rem;
+		font: inherit;
+		padding: 0.5rem;
+		border: 1px solid #c6ccd4;
+		border-radius: 4px;
+		margin-bottom: 1.5rem;
 	}
 
 	.danger {
